@@ -1,33 +1,18 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   user.cpp                                           :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: mfadil <mfadil@student.42.fr>              +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/07/30 17:48:53 by mfadil            #+#    #+#             */
-/*   Updated: 2024/08/14 18:19:49 by mfadil           ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
+#include "../includes/Server.hpp"
 
-#include "../includes/irc.hpp"
-
-int	Server::cmdUser(std::vector<std::string> args, Client &cl)
+int	Server::cmdUser(std::string cmds, Client &cl)
 {
-	std::string	tmp;
-	std::string	cmd = args.at(0);
+	
+	std::vector<std::string> args = splitCommands(del_break(cmds));
 	if (args.size() < 5)
+		return cl.reply(ERR_NEEDMOREPARAMS(cl.getNickname(),cl.getHost(), "USER")),-1;
+	if(cl.getState() == REGISTERED)
+        return cl.reply(ERR_ALREADYREGISTERED(cl.getHost(),cl.getNickname())),-1;
+	if(cl.getState() != LOGIN)
+        return cl.reply(ERR_NOTREGISTERED(cl.getNickname(),cl.getHost())),-1;
+	if (args.size() >= 5)
 	{
-		cl.reply(ERROR_NEED_MORE_PARAMETERS(cl, "User"));
-		return (-1);
-	}
-	else if (cl.getUsername() == args.at(1))
-	{
-		cl.reply("462 " + cl.getNickname() + " " + cmd + " :Unauthorized command (already registered)");
-		return (-1);
-	}
-	else if (args.size() >= 5)
-	{
+		std::string	tmp;
 		size_t i;
 		cl.setUsername(args.at(1));
 		for (i = 1; i < args.size() - 1; i++)
@@ -52,6 +37,7 @@ int	Server::cmdUser(std::vector<std::string> args, Client &cl)
 		tmp += args.at(i);
 		cl.setFullname(tmp);
 	}
+	displayClient();
 	cl.welcome();
 	return (0);
 }

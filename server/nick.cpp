@@ -1,10 +1,10 @@
-#include "../includes/irc.hpp"
+#include "../includes/Server.hpp"
 
 bool	Server::is_used(Client cl, std::string name)
 {
-	for (std::vector<Client>::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
+	for (std::map<int,Client*>::iterator it = this->_clients.begin(); it != this->_clients.end(); ++it)
 	{
-		if (it->getNickname() == name && it->getFd() != cl.getFd())
+		if (it->second->getNickname() == name && it->second->getFd() != cl.getFd())
 			return (true);
 	}
 	return (false);
@@ -31,43 +31,43 @@ bool	is_valid_nick(std::string name)
 	}
 	return (true);
 }
-
-std::string	ERRMSG_EMPTY(Client cl)
-{
-	return ("\033[1;91m" + cl.getNickname() + " :No nickname was given\033[0m");
-}
-
-std::string	NICK_ERR(Client cl, std::string newNick)
-{
-	return ("\033[1;91m" + cl.getNickname() + " " + newNick + " :Error in nickname\033[0m");
-}
-
-std::string	ERRMSG_ALREADYUSED(Client cl, std::string newNick)
-{
-	return ("\033[1;91m" + cl.getNickname() + " " + newNick + " :Nickname already used\033[0m");
-}
-
 std::string NICK_SUCCESS(std::string newNick)
 {
-	return ("\033[1;92mNICK " + newNick + "\033[0m");
+	return ("\033[1;92mNICK " + newNick + "\033[0m\r\n");
 }
 
-int Server::cmdNick(std::vector<std::string> args, Client& client)
+int Server::cmdNick(std::string cmd, Client& client)
 {
-	if (args.size() < 2) return (client.reply(ERRMSG_EMPTY(client)), -1);
-
-	std::string requestedNick = del_break(args[1]);
-	std::string oldnick = client.getNickname().empty() ? client.getNickname() : "";
+	std::vector<std::string> args = splitCommands(cmd);
+	if (args.size() < 2)
+		return (client.reply(ERR_NONICKNAMEGIVEN(client.getNickname(),client.getHost())), -1);
+	std::string requestedNick = args[1];
 	if (!is_valid_nick(requestedNick))
-		return (client.reply(NICK_ERR(client, requestedNick)), -1);
-
+		return (client.reply(ERR_ERRONEUSNICKNAME(client.getNickname(),client.getHost(),requestedNick)), -1);
 	if (is_used(client, requestedNick))
-		return (client.reply(ERRMSG_ALREADYUSED(client, requestedNick)), -1);
-
-	if(!oldnick.empty())
-		getAllChannelAddByClient(client,oldnick,requestedNick);
-	client.reply(NICK_SUCCESS(requestedNick));
+		return (client.reply(ERR_NICKNAMEINUSE(client.getNickname(),client.getHost())), -1);
+	if(client.getState() == REGISTERED)
+	{
+		client.reply(RPL_NICKCHANGE(client.getNickname(),requestedNick,client.getUsername(),client.getHost()));
+		std::map<std::string,Channel*>::iterator it = _channels.begin();
+		while (it != _channels.end())
+		{
+			if(it->second->checkIfIsClient(client.getNickname()))
+			{
+				it->second->sendReplyAll(RPL_NICKCHANGE(client.getNickname(),requestedNick,client.getUsername(),client.getHost()),client.getNickname());
+				it->second->changeNickName(client.getNickname(),requestedNick);
+			}
+			it++;
+		}
+	}
+	else
+	{
+		if(client.getState() != LOGIN)
+        	return client.reply(ERR_NOTREGISTERED(client.getNickname(),client.getHost())),-1;///bdloooh
+		client.reply(NICK_SUCCESS(requestedNick));
+	}
 	client.setNickname(requestedNick);
+	displayClient();
 	client.welcome();
 	return (0);
 }

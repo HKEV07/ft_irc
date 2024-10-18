@@ -1,52 +1,57 @@
-#include "includes/irc.hpp"
+#include "./includes/Server.hpp"
 
 bool	g_interrupt = false;
 
 std::string	del_break(std::string str)
 {
 	if (str.empty())
-		return ("");
-	if (str[str.size() - 1] == '\r')
-		return (str.substr(0, (str.size() - 1)));
+		return (str);
+	while (1)
+	{
+		if (str[str.size() - 1] == '\r')
+			str = str.substr(0, (str.size() - 1));
+		else if(str[str.size() - 1] == '\n')
+			str = str.substr(0, (str.size() - 1));
+		else if(str[str.size() - 1] == '\v')
+			str = str.substr(0, (str.size() - 1));
+		else if(str[str.size() - 1] == '\t')
+			str = str.substr(0, (str.size() - 1));
+		else if(str[str.size() - 1] == '\f')
+			str = str.substr(0, (str.size() - 1));
+		else
+			break;
+	}
 	return (str);
 }
 
 std::string	ERROR_NEED_MORE_PARAMETERS(Client &client, std::string cmd)
 {
-	return ("461 " + client.getNickname() + " " + cmd + " :Not enough parameters");
+	return ("461 " + client.getNickname() + " " + cmd + " :Not enough parameters\r\n");
 }
 
 void	signalHandler(int const signal)
 {
 	(void)signal;
 	g_interrupt = true;
-	std::cout << "\b\b";
 }
 
-bool	getport(char *ac, int &port)
+int	getport(std::string sport)
 {
-	char	*buffer;
-
-	if (*ac == '\0')
-		return (false);
-	port = strtol(ac, &buffer, 10);
-	if (*buffer != '\0')
+	if (sport.size() < 4 || sport.size() > 5)
 	{
-		std::cout << "Error input: port must contain only digits" << std::endl;
-		return (false);
+		return (-1);
 	}
-	if (port < 0 || port > 65535)
+	for (size_t i = 0; i < sport.size(); i++)
 	{
-		std::cout << "Error input: port is out of range [0; 65535]" << std::endl;
-		return (false);
+		if (sport[i] < '0' || sport[i] > '9')
+		{
+			return (-1);
+		}
 	}
-	return (true);
+	return (std::atoi(sport.c_str()));
 }
-
 int main(int ac, char **av)
 {
-	int port;
-
 	signal(SIGINT, signalHandler);
 	signal(SIGQUIT, signalHandler);
 	if (ac != 3)
@@ -54,11 +59,29 @@ int main(int ac, char **av)
 		std::cout << "Usage: ./ircserv <port> <password>" << std::endl;
 		return (1);
 	}
-	if (getport(av[1], port) == false)
+	const std::string password = av[2];
+	for (size_t i = 0; i < password.size(); i++)
+	{
+		if (password[i] <= ' ' || password[i] > '~')
+		{
+			std::cout << "Error input: password must contain only printable characters" << std::endl;
+			return (1);
+		}
+	}
+	if ((password.size() < 2) || (password.size() > 8))
+	{
+		std::cout << "Error input: password must contain at least 2 characters" << std::endl;
 		return (1);
+	}
+	const int port = getport(av[1]);
+	if (port < 1024 || port > 65535)
+	{
+		std::cout << "Error input: port must be between 1024 and 65535" << std::endl;
+		return (-1);
+	}
 	try
 	{
-		Server server(port, av[2]);
+		Server server(port, password);
 		server.launch();
 	}
 	catch (const std::exception &e)
